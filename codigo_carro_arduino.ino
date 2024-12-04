@@ -1,4 +1,5 @@
 #include <HCSR04.h>
+#include <SoftwareSerial.h>  // Biblioteca para comunicação Bluetooth
 
 #define velMotor1 2
 #define velMotor2 3
@@ -11,18 +12,20 @@
 #define pTrigger 6
 
 UltraSonicDistanceSensor distanceSensor(pTrigger, pEcho);
+SoftwareSerial bluetooth(4, 7);  // RX, TX para o módulo HC-05
 
 int vel1 = 255;
-
 int vel2 = 129;
 
 int measureDist = 0;
+int dist = 0; // este valor será passado pelo Qt
 
-int dist = 15; // este valor sera passado pelo qt
-
+// Variável de controle do modo automático
+bool autoParkingEnabled = false;
 
 void setup() {
   Serial.begin(9600);
+  bluetooth.begin(9600);
 
   pinMode(velMotor1, OUTPUT);
   pinMode(velMotor2, OUTPUT);
@@ -34,83 +37,109 @@ void setup() {
   digitalWrite(in2, LOW);
   digitalWrite(in3, LOW);
   digitalWrite(in4, LOW);
-  analogWrite(velMotor1,vel1);
-  analogWrite(velMotor2,vel1);
-  analogWrite(velMotor1,vel2);
-  analogWrite(velMotor2,vel2);
+  analogWrite(velMotor1, vel1);
+  analogWrite(velMotor2, vel2);
 }
 
 void loop() {
-  measureDist = distanceSensor.measureDistanceCm();
-  Serial.print(measureDist);
-  Serial.println("cm");
+  // Leitura de comandos via Bluetooth
+  if (bluetooth.available()) {
+    String command = bluetooth.readStringUntil('\n');
+    command.trim(); // Remove espaços em branco extras
 
-  analogWrite(velMotor1,vel2);
-  analogWrite(velMotor2,vel2);
+    if (command.startsWith("DIST:")) {
+      dist = command.substring(5).toInt();
+      Serial.print("Nova distância de parada: ");
+      Serial.println(dist);
+    }
+    else if (command == "CMD:FORWARD") {
+      moveForward();
+    }
+    else if (command == "CMD:BACK") {
+      moveBack();
+    }
+    else if (command == "CMD:LEFT") {
+      turnLeft();
+    }
+    else if (command == "CMD:RIGHT") {
+      turnRight();
+    }
+    else if (command == "CMD:STOP") {
+      stopMotors();
+    }
+    else if (command == "AUTO:ON") {
+      autoParkingEnabled = true;
+      Serial.println("Modo de estacionamento automático ativado");
+    }
+    else if (command == "AUTO:OFF") {
+      autoParkingEnabled = false;
+      Serial.println("Modo de estacionamento automático desativado");
+    }
+  }
 
-  if(dist < measureDist - 5){
-    digitalWrite(in1, HIGH);
-    digitalWrite(in2, LOW);
-    digitalWrite(in3, HIGH);
-    digitalWrite(in4, LOW);
-  }
-  else if(dist > measureDist + 5){
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, HIGH);
-    digitalWrite(in3, LOW);
-    digitalWrite(in4, HIGH);
-  }
+  // Modo de estacionamento automático
+  if (autoParkingEnabled) {
+    measureDist = distanceSensor.measureDistanceCm();
+    Serial.print(measureDist);
+    Serial.println("cm");
 
-  analogWrite(velMotor1,vel1);
-  analogWrite(velMotor2,vel1);
-
-  if(dist < measureDist){
-    digitalWrite(in1, HIGH);
-    digitalWrite(in2, LOW);
-    digitalWrite(in3, HIGH);
-    digitalWrite(in4, LOW);
+    if (dist < measureDist - 5) {
+      moveForward();
+    } 
+    else if (dist > measureDist + 5) {
+      moveBack();
+    } 
+    else if (dist == measureDist) {
+      stopMotors();
+    }
   }
-  else if(dist > measureDist){
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, HIGH);
-    digitalWrite(in3, LOW);
-    digitalWrite(in4, HIGH);
-  }
-  else if(dist == measureDist){
-    digitalWrite(in1, HIGH);
-    digitalWrite(in2, HIGH);
-    digitalWrite(in3, HIGH);
-    digitalWrite(in4, HIGH);
-  }
-  else{
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, LOW);
-    digitalWrite(in3, LOW);
-    digitalWrite(in4, LOW);
-  }
-  
-
-
-  
 }
 
+// Funções de controle dos motores
+void moveForward() {
+  analogWrite(velMotor1, vel2);
+  analogWrite(velMotor2, vel2);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+  Serial.println("Movendo para frente");
+}
 
+void moveBack() {
+  analogWrite(velMotor1, vel2);
+  analogWrite(velMotor2, vel2);
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+  Serial.println("Movendo para trás");
+}
 
+void turnLeft() {
+  analogWrite(velMotor1, vel2);
+  analogWrite(velMotor2, vel2);
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+  Serial.println("Virando à esquerda");
+}
 
+void turnRight() {
+  analogWrite(velMotor1, vel2);
+  analogWrite(velMotor2, vel2);
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+  Serial.println("Virando à direita");
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+void stopMotors() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+  Serial.println("Parando os motores");
+}
